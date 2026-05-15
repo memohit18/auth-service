@@ -10,7 +10,7 @@ NestJS authentication service. Database schemas live in the [`db-schema`](https:
 - Node.js 18+
 - npm
 - PostgreSQL (`DATABASE_URL`)
-- MongoDB (`MONGODB_URI`)
+- MongoDB (`MONGODB_URL`)
 - Git
 
 ## Project structure
@@ -76,14 +76,14 @@ Copy `.env.example` to `.env` and set:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
-MONGODB_URI="mongodb://localhost:27017/auth_logs"
-PORT=3000
+MONGODB_URL="mongodb://localhost:27017/auth_logs"
+PORT=3300
 ```
 
 Remote MongoDB example:
 
 ```env
-MONGODB_URI="mongodb://USERNAME:PASSWORD@HOST:27017/auth_logs"
+MONGODB_URL="mongodb://USERNAME:PASSWORD@HOST:27017/auth_logs"
 ```
 
 ### 3. Generate Prisma client (PostgreSQL)
@@ -159,4 +159,4 @@ npm run prisma:generate
 
 **`Cannot find module 'dist/main'`** — `npm run build` or use `npm run start:dev` (Nest resolves `dist/src/main.js`)
 
-**MongoDB connection errors** — verify `MONGODB_URI` in `.env` and that MongoDB is running
+**MongoDB connection errors** — verify `MONGODB_URL` in `.env` and that MongoDB is running
