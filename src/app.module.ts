@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import appConfig from './config/app.config';
+import { DatabaseModule } from './database/database.module';
+import { HealthModule } from './modules/health/health.module';
+import { LogsModule } from './modules/logs/logs.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -9,7 +13,17 @@ import { PrismaModule } from './prisma/prisma.module';
       isGlobal: true,
       load: [appConfig],
     }),
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        uri: configService.getOrThrow<string>('mongodbUri'),
+      }),
+      inject: [ConfigService],
+    }),
     PrismaModule,
+    DatabaseModule,
+    HealthModule,
+    LogsModule,
   ],
 })
 export class AppModule {}

@@ -1,12 +1,16 @@
 # auth-service
 
-NestJS authentication service. Database models and migrations live in the [`db-schema`](https://github.com/memohit18/db-schema)[private-repo] Git submodule so all services share one centralized Prisma schema.
+NestJS authentication service. Database schemas live in the [`db-schema`](https://github.com/memohit18/db-schema) Git submodule:
+
+- **PostgreSQL** (`db-schema/postgres`) — auth, users, RBAC, relations (Prisma)
+- **MongoDB** (`db-schema/mongodb`) — logs, events, analytics (Mongoose)
 
 ## Prerequisites
 
 - Node.js 18+
 - npm
-- PostgreSQL (reachable via `DATABASE_URL`)
+- PostgreSQL (`DATABASE_URL`)
+- MongoDB (`MONGODB_URI`)
 - Git
 
 ## Project structure
@@ -16,25 +20,25 @@ auth-service/
 ├── src/
 │   ├── common/
 │   ├── config/
-│   ├── prisma/           # PrismaModule + PrismaService
+│   ├── prisma/              # PrismaModule (PostgreSQL)
 │   ├── modules/
 │   │   ├── auth/
 │   │   ├── users/
-│   │   └── health/
+│   │   ├── health/
+│   │   └── logs/            # Mongoose activity logs
 │   ├── app.module.ts
 │   └── main.ts
-├── db-schema/              # Git submodule → centralized schema
-│   └── prisma/
-├── .env                    # Local secrets (gitignored)
+├── db-schema/                 # Git submodule
+│   ├── postgres/prisma/
+│   └── mongodb/schemas/
+├── .env
+├── .env.example
 ├── package.json
 ├── tsconfig.json
-├── tsconfig.build.json
 └── nest-cli.json
 ```
 
 ## Clone this repository
-
-Clone **with submodules** so `db-schema` is populated in one step:
 
 ```bash
 git clone --recursive git@github.com:memohit18/auth-service.git
@@ -47,9 +51,7 @@ If you already cloned without `--recursive`:
 git submodule update --init --recursive
 ```
 
-## Add the schema submodule (new service / first-time setup)
-
-From the root of a service repo that should use the shared schema:
+## Add the schema submodule (new project)
 
 ```bash
 git submodule add git@github.com:memohit18/db-schema.git db-schema
@@ -58,120 +60,103 @@ git add .gitmodules db-schema
 git commit -m "Add db-schema submodule for centralized database schema"
 ```
 
-Push the service repo. Anyone who clones it should run:
-
-```bash
-git submodule update --init --recursive
-```
-
 ## Local setup
 
 ### 1. Install dependencies
 
 ```bash
-# Auth service (NestJS)
 npm install
 
-# Submodule (Prisma CLI + schema tooling)
-cd db-schema
-npm install
-cd ..
+cd db-schema && npm install && cd ..
 ```
 
 ### 2. Environment variables
 
-Create `.env` in the **auth-service** root (this file is gitignored):
+Copy `.env.example` to `.env` and set:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
+MONGODB_URI="mongodb://localhost:27017/auth_logs"
 PORT=3000
 ```
 
-Use the same `DATABASE_URL` when running Prisma commands against the shared schema.
+Remote MongoDB example:
 
-### 3. Generate Prisma client
+```env
+MONGODB_URI="mongodb://USERNAME:PASSWORD@HOST:27017/auth_logs"
+```
 
-From the auth-service root (required after `npm install` or submodule updates):
+### 3. Generate Prisma client (PostgreSQL)
+
+From **auth-service** root:
 
 ```bash
 npm run prisma:generate
 ```
 
-This generates the client from `db-schema/prisma/schema.prisma` and copies it into `node_modules/.prisma/client` for this service. `prestart:dev` and `postinstall` run this automatically.
-
-### 4. Apply schema to the database (optional)
-
-Run migrations from the submodule (recommended for shared environments):
+Equivalent:
 
 ```bash
-cd db-schema
-npx prisma migrate deploy
-cd ..
+npx prisma generate --schema=./db-schema/postgres/prisma/schema.prisma
 ```
 
-For local development you can use `npx prisma db push` instead — see [`db-schema/README.md`](db-schema/README.md).
+### 4. Run PostgreSQL migrations (optional)
+
+From **auth-service** root:
+
+```bash
+npm run prisma:migrate:dev -- --name init
+```
+
+Equivalent:
+
+```bash
+npx prisma migrate dev \
+  --schema=./db-schema/postgres/prisma/schema.prisma \
+  --name init
+```
 
 ### 5. Run the API
 
 ```bash
-# Development (watch mode)
 npm run start:dev
-
-# Production build + run
-npm run build
-npm run start:prod
 ```
 
-The server listens on `PORT` from `.env`, or **3000** by default.
+Health check: `GET http://localhost:<PORT>/health`
 
 ## npm scripts
 
 | Script | Description |
 |--------|-------------|
-| `npm run start:dev` | Start NestJS in watch mode |
+| `npm run prisma:generate` | Generate Prisma client from postgres schema |
+| `npm run prisma:migrate:dev` | Run Prisma migrate dev (pass `-- --name <name>`) |
+| `npm run start:dev` | NestJS watch mode |
 | `npm run build` | Compile to `dist/` |
-| `npm run start` | Run compiled app (`dist/main.js`) |
-| `npm run start:prod` | Same as `start` (production) |
+| `npm run start:prod` | Run production build |
 
 ## Keep the submodule up to date
 
-Pull the submodule commit recorded in this repo:
-
 ```bash
 git submodule update --init --recursive
-```
-
-Fetch the latest `db-schema` from its remote and update the pointer (then commit the change in auth-service):
-
-```bash
 git submodule update --remote db-schema
-```
-
-After updating the submodule, regenerate the client:
-
-```bash
-npx prisma generate --schema=./db-schema/prisma/schema.prisma
+npm run prisma:generate
 ```
 
 ## Centralized schema
 
 | | |
 |---|---|
-| Submodule path | `db-schema/` |
-| Repository | [github.com/memohit18/db-schema](https://github.com/memohit18/db-schema) |
-| Schema file | `db-schema/prisma/schema.prisma` |
+| Submodule | `db-schema/` |
+| PostgreSQL schema | `db-schema/postgres/prisma/schema.prisma` |
+| MongoDB schemas | `db-schema/mongodb/schemas/` |
 | Docs | [`db-schema/README.md`](db-schema/README.md) |
-
-Schema changes are made in the **db-schema** repo, not duplicated in auth-service.
 
 ## Troubleshooting
 
-**`db-schema/` is empty after clone** — run `git submodule update --init --recursive`.
+**`db-schema/` is empty** — `git submodule update --init --recursive`
 
-**`Cannot find module 'dist/main'`** — run `npm run build` before `npm run start`, or use `npm run start:dev`.
+**`@prisma/client did not initialize yet`** — `npm run prisma:generate`
 
-**Port already in use** — change `PORT` in `.env` or stop the process using port 3000.
+**`Cannot find module 'dist/main'`** — `npm run build` or use `npm run start:dev` (Nest resolves `dist/src/main.js`)
 
-**`@prisma/client did not initialize yet`** — run `npm run prisma:generate`.
-
-**Prisma client out of date** — run `npm run prisma:generate` after pulling submodule updates.
+**MongoDB connection errors** — verify `MONGODB_URI` in `.env` and that MongoDB is running
