@@ -1,9 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
-
-# Local npm manifest (Prisma CLI at repo root; commit when the service is ready)
-package.json
 
 # Environment (secrets — never commit)
 .env
@@ -34,3 +30,8 @@ Thumbs.db
 dist/
 build/
 coverage/
+*.tsbuildinfo
+
+# Accidental compile output in src (should only be in dist/)
+src/**/*.js
+src/**/*.js.map
