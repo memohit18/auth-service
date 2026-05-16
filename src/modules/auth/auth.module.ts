@@ -2,11 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { AuthMailService } from './auth-mail.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { ResendVerificationEmailService } from './resend-verification-email.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -27,11 +27,11 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   controllers: [AuthController],
   providers: [
     AuthService,
-    AuthMailService,
+    ResendVerificationEmailService,
     JwtStrategy,
     JwtAuthGuard,
     RolesGuard,
   ],
-  exports: [AuthService, JwtModule, RolesGuard],
+  exports: [AuthService, JwtModule, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}

@@ -3,26 +3,19 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-  "prisma:generate": "prisma generate --schema=db-schema/postgres/prisma/schema.prisma",
-
-  "prisma:migrate:dev": "prisma migrate dev --schema=db-schema/postgres/prisma/schema.prisma",
-
-  "build": "nest build",
-
-  "prebuild": "npm run prisma:generate",
-
-  "start": "node -r dotenv/config dist/src/main.js",
-
-  "start:dev": "nest start --watch",
-
-  "start:prod": "node -r dotenv/config dist/src/main.js"
-},
+    "prisma:generate": "prisma generate --schema=db-schema/postgres/prisma/schema.prisma",
+    "prisma:migrate:dev": "prisma migrate dev --schema=db-schema/postgres/prisma/schema.prisma",
+    "build": "nest build",
+    "prebuild": "npm run prisma:generate",
+    "start": "node -r dotenv/config dist/src/main.js",
+    "start:dev": "nest start --watch",
+    "start:prod": "node -r dotenv/config dist/src/main.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@nestjs-modules/mailer": "^2.3.4",
     "@nestjs/common": "^11.1.21",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.21",
@@ -38,11 +31,11 @@
     "cookie-parser": "^1.4.7",
     "helmet": "^8.1.0",
     "mongoose": "^9.6.2",
-    "nodemailer": "^8.0.7",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "prisma": "^5.22.0",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.12.3",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
@@ -54,7 +47,6 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/node": "^25.8.0",
-    "@types/nodemailer": "^8.0.0",
     "ts-loader": "^9.5.7",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"

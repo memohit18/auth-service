@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -5,55 +6,52 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { User as UserRecord } from '.prisma/client';
+import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PiiCryptoService } from '../../common/crypto/pii-crypto.service';
-import { PrismaService } from '../../prisma/prisma.service';
-import { AuthMailService } from './auth-mail.service';
+import { UsersRepository } from '../../prisma/users.repository';
+import { ResendVerificationEmailService } from './resend-verification-email.service';
 import { Role } from './decorators/roles.decorator';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
-import { JwtPayload } from './interfaces/jwt-payload.interface';
-import {
-  generateVerificationToken,
-  hashVerificationToken,
-  verifiedUserToken,
-} from './utils/verification-token.util';
+import type { JwtPayload } from './interfaces/jwt-payload.interface';
+import { generateVerificationToken } from './utils/verification-token.util';
+
+const RESEND_VERIFICATION_SENT =
+  'If an account exists and is awaiting verification, a new email may have been sent.';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly usersRepository: UsersRepository,
     private readonly jwtService: JwtService,
     private readonly piiCrypto: PiiCryptoService,
-    private readonly authMailService: AuthMailService,
+    private readonly resendVerificationEmail: ResendVerificationEmailService,
   ) {}
 
   async signup(dto: SignupDto) {
-    const existing = await this.findExistingByEmailOrPhone(dto.email, dto.phone);
+    const existing = await this.findUserForLogin(dto.email);
 
     if (existing) {
-      throw new ConflictException('Email or phone number already registered');
+      throw new ConflictException('Email is already registered');
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const verificationToken = generateVerificationToken();
-    const hashedVerificationToken = hashVerificationToken(verificationToken);
+    const phonePlain = `pending:${randomUUID()}`;
 
-    const user = await this.prisma.user.create({
-      data: {
-        name: dto.name,
-        email: this.piiCrypto.encryptEmail(dto.email),
-        password: hashedPassword,
-        phone: this.piiCrypto.encryptPhone(dto.phone),
-        countryCode: dto.countryCode,
-        role: dto.role ?? Role.User,
-        isEmailVerified: false,
-        emailVerificationToken: hashedVerificationToken,
-      },
+    const user = await this.usersRepository.create({
+      name: dto.name,
+      email: this.piiCrypto.encryptEmail(dto.email),
+      password: hashedPassword,
+      phone: this.piiCrypto.encryptPhone(phonePlain),
+      countryCode: 'XX',
+      role: dto.role ?? Role.User,
+      isEmailVerified: false,
+      emailVerificationToken: verificationToken,
     });
 
-    await this.authMailService.sendVerificationEmail(
+    await this.resendVerificationEmail.sendVerificationEmail(
       dto.email,
       verificationToken,
     );
@@ -61,8 +59,14 @@ export class AuthService {
     return {
       success: true,
       message:
-        'Account created. Please check your email to verify your account before logging in.',
-      user: this.toPublicUser(user, dto.email, dto.phone),
+        'Account created. Check your email to verify before logging in.',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: dto.email,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+      },
     };
   }
 
@@ -84,25 +88,23 @@ export class AuthService {
     }
 
     if (!user.isEmailVerified) {
-      throw new UnauthorizedException('Please verify your email first');
+      throw new UnauthorizedException(
+        'Please verify your email before logging in',
+      );
     }
 
-    const email = this.piiCrypto.resolveEmail(user.email);
-    const phone = this.piiCrypto.resolvePhone(user.phone);
-
-    return this.buildAuthResponse(user, email, phone);
+    const access_token = this.signSessionToken(user.id);
+    return { access_token };
   }
 
   async verifyEmail(token: string) {
-    if (!token?.trim()) {
+    const value = token?.trim();
+
+    if (!value) {
       throw new BadRequestException('Verification token is required');
     }
 
-    const hashedToken = hashVerificationToken(token.trim());
-
-    const user = await this.prisma.user.findUnique({
-      where: { emailVerificationToken: hashedToken },
-    });
+    const user = await this.usersRepository.findByEmailVerificationToken(value);
 
     if (!user || user.isDeleted) {
       throw new BadRequestException('Invalid or expired verification token');
@@ -112,12 +114,9 @@ export class AuthService {
       throw new BadRequestException('Email is already verified');
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        isEmailVerified: true,
-        emailVerificationToken: verifiedUserToken(user.id),
-      },
+    await this.usersRepository.updateById(user.id, {
+      isEmailVerified: true,
+      emailVerificationToken: null,
     });
 
     return {
@@ -126,66 +125,47 @@ export class AuthService {
     };
   }
 
-  private async findExistingByEmailOrPhone(
-    email: string,
-    phone: string,
-  ): Promise<UserRecord | null> {
-    const encryptedEmail = this.piiCrypto.encryptEmail(email);
-    const encryptedPhone = this.piiCrypto.encryptPhone(phone);
+  /**
+   * Does not disclose whether email exists (except via timing); always same message when plausible.
+   */
+  async resendVerificationEmailSafe(emailRaw: string) {
+    const user = await this.findUserForLogin(emailRaw.trim());
 
-    const directMatch = await this.prisma.user.findFirst({
-      where: {
-        OR: [{ email: encryptedEmail }, { phone: encryptedPhone }],
-      },
-    });
-
-    if (directMatch) {
-      return directMatch;
+    if (!user?.emailVerificationToken || user.isDeleted) {
+      return { success: true, message: RESEND_VERIFICATION_SENT };
     }
 
-    const normalizedEmail = this.piiCrypto.normalizeEmail(email);
-    const normalizedPhone = this.piiCrypto.normalizePhone(phone);
-
-    const users = await this.prisma.user.findMany({
-      select: { id: true, email: true, phone: true },
-    });
-
-    const legacyMatch = users.find((user) => {
-      const resolvedEmail = this.piiCrypto.normalizeEmail(
-        this.piiCrypto.resolveEmail(user.email),
-      );
-      const resolvedPhone = this.piiCrypto.normalizePhone(
-        this.piiCrypto.resolvePhone(user.phone),
-      );
-
-      return (
-        resolvedEmail === normalizedEmail || resolvedPhone === normalizedPhone
-      );
-    });
-
-    if (!legacyMatch) {
-      return null;
+    if (user.isEmailVerified) {
+      return { success: true, message: RESEND_VERIFICATION_SENT };
     }
 
-    return this.prisma.user.findUnique({ where: { id: legacyMatch.id } });
+    const newToken = generateVerificationToken();
+
+    await this.usersRepository.updateById(user.id, {
+      emailVerificationToken: newToken,
+    });
+
+    await this.resendVerificationEmail.sendVerificationEmail(
+      this.piiCrypto.resolveEmail(user.email),
+      newToken,
+    );
+
+    return { success: true, message: RESEND_VERIFICATION_SENT };
   }
 
-  private async findUserForLogin(email: string): Promise<UserRecord | null> {
+  private async findUserForLogin(email: string): Promise<User | null> {
     const normalizedEmail = this.piiCrypto.normalizeEmail(email);
     const encryptedEmail = this.piiCrypto.encryptEmail(email);
 
     let user =
-      (await this.prisma.user.findUnique({ where: { email: encryptedEmail } })) ??
-      (await this.prisma.user.findFirst({
-        where: {
-          OR: [{ email: normalizedEmail }, { email: email.trim() }],
-        },
-      }));
+      (await this.usersRepository.findByEncryptedEmail(encryptedEmail)) ??
+      (await this.usersRepository.findByPlainEmailCandidates([
+        normalizedEmail,
+        email.trim(),
+      ]));
 
     if (!user) {
-      const users = await this.prisma.user.findMany({
-        select: { id: true, email: true },
-      });
+      const users = await this.usersRepository.findManyEmailIds();
 
       const legacyMatch = users.find(
         (candidate) =>
@@ -198,9 +178,7 @@ export class AuthService {
         return null;
       }
 
-      user = await this.prisma.user.findUnique({
-        where: { id: legacyMatch.id },
-      });
+      user = await this.usersRepository.findById(legacyMatch.id);
     }
 
     if (!user) {
@@ -210,7 +188,7 @@ export class AuthService {
     return this.ensureUserPiiEncrypted(user);
   }
 
-  private async ensureUserPiiEncrypted(user: UserRecord): Promise<UserRecord> {
+  private async ensureUserPiiEncrypted(user: User): Promise<User> {
     const emailPlain = this.piiCrypto.resolveEmail(user.email);
     const phonePlain = this.piiCrypto.resolvePhone(user.phone);
 
@@ -221,59 +199,14 @@ export class AuthService {
       return user;
     }
 
-    return this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        email: encryptedEmail,
-        phone: encryptedPhone,
-      },
+    return this.usersRepository.updateById(user.id, {
+      email: encryptedEmail,
+      phone: encryptedPhone,
     });
   }
 
-  private toPublicUser(
-    user: UserRecord,
-    email: string,
-    phone: string,
-  ) {
-    return {
-      id: user.id,
-      name: user.name,
-      email,
-      phone,
-      countryCode: user.countryCode,
-      role: user.role,
-      isEmailVerified: user.isEmailVerified,
-    };
-  }
-
-  private buildAuthResponse(
-    user: {
-      id: string;
-      name: string;
-      countryCode: string;
-      role: string;
-      isEmailVerified: boolean;
-    },
-    email: string,
-    phone: string,
-  ) {
-    const payload: JwtPayload = {
-      sub: user.id,
-      email,
-      role: user.role,
-    };
-
-    return {
-      access_token: this.jwtService.sign(payload),
-      user: {
-        id: user.id,
-        name: user.name,
-        email,
-        phone,
-        countryCode: user.countryCode,
-        role: user.role,
-        isEmailVerified: user.isEmailVerified,
-      },
-    };
+  private signSessionToken(userId: string): string {
+    const payload: JwtPayload = { sub: userId };
+    return this.jwtService.sign(payload);
   }
 }

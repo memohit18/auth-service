@@ -1,6 +1,12 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, Role } from '../decorators/roles.decorator';
+import { JwtUser } from '../interfaces/jwt-user.interface';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -16,8 +22,18 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const { user } = context.switchToHttp().getRequest();
+    const { user } = context.switchToHttp().getRequest<{ user?: JwtUser }>();
 
-    return requiredRoles.some((role) => user?.role === role);
+    if (!user) {
+      throw new ForbiddenException('Admin role required');
+    }
+
+    const hasRole = requiredRoles.some((role) => user.role === role);
+
+    if (!hasRole) {
+      throw new ForbiddenException('Admin role required');
+    }
+
+    return true;
   }
 }

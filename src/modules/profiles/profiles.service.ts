@@ -1,24 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { User } from '@prisma/client';
 import { PiiCryptoService } from '../../common/crypto/pii-crypto.service';
-import { PrismaService } from '../../prisma/prisma.service';
+import { UsersRepository } from '../../prisma/users.repository';
 
 @Injectable()
 export class ProfilesService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly usersRepository: UsersRepository,
     private readonly piiCrypto: PiiCryptoService,
   ) {}
 
   async listUsers() {
-    const users = await this.prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    const users = await this.usersRepository.findAllOrderByNewest();
 
     return users.map((user) => this.toPublicProfile(user));
   }
 
   async getUserById(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.usersRepository.findById(id);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -27,18 +26,7 @@ export class ProfilesService {
     return this.toPublicProfile(user);
   }
 
-  private toPublicProfile(user: {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    countryCode: string;
-    role: string;
-    isEmailVerified: boolean;
-    isDeleted: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  }) {
+  private toPublicProfile(user: User) {
     return {
       id: user.id,
       name: user.name,

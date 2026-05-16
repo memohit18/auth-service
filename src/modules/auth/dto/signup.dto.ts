@@ -17,16 +17,8 @@ export class SignupDto {
   email: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(6)
   password: string;
-
-  @IsString()
-  @IsNotEmpty()
-  phone: string;
-
-  @IsString()
-  @IsNotEmpty()
-  countryCode: string;
 
   @IsEnum(Role, { message: 'role must be either user or admin' })
   @IsOptional()
