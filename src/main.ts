@@ -11,7 +11,11 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port');
 
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.use(compression());
   app.use(cookieParser());
 
