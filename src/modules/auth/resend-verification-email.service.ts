@@ -3,10 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { PiiCryptoService } from '../../common/crypto/pii-crypto.service';
 
-/**
- * Sends verification email via Resend when `AUTH_SERVICE_RESEND_VERIFY` path runs (`signup`, `resend-verification`).
- * Invoked internally only — no dedicated mail HTTP route.
- */
+/** Sends verification email via Resend from `signup` and `POST /auth/resend-verification` only. */
 @Injectable()
 export class ResendVerificationEmailService {
   private readonly logger = new Logger(ResendVerificationEmailService.name);

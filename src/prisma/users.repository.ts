@@ -33,23 +33,6 @@ export class UsersRepository {
     });
   }
 
-  findFirstByEncryptedEmailOrPhone(
-    encryptedEmail: string,
-    encryptedPhone: string,
-  ): Promise<User | null> {
-    return this.prisma.user.findFirst({
-      where: {
-        OR: [{ email: encryptedEmail }, { phone: encryptedPhone }],
-      },
-    });
-  }
-
-  findManyEmailPhoneIds(): Promise<Pick<User, 'id' | 'email' | 'phone'>[]> {
-    return this.prisma.user.findMany({
-      select: { id: true, email: true, phone: true },
-    });
-  }
-
   findManyEmailIds(): Promise<Pick<User, 'id' | 'email'>[]> {
     return this.prisma.user.findMany({
       select: { id: true, email: true },

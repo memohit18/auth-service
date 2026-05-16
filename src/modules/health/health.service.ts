@@ -49,7 +49,6 @@ export class HealthService {
   private async checkPostgres(): Promise<'up' | 'down'> {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
-      await this.prisma.$queryRaw`SELECT 1 FROM "users" LIMIT 1`;
       return 'up';
     } catch {
       return 'down';
