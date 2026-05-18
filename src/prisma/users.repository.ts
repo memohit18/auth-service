@@ -27,6 +27,10 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
+  findByEncryptedPhone(phone: string): Promise<User | null> {
+    return this.prisma.user.findUnique({ where: { phone } });
+  }
+
   findByPlainEmailCandidates(emails: string[]): Promise<User | null> {
     return this.prisma.user.findFirst({
       where: { OR: emails.map((email) => ({ email })) },

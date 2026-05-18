@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -36,16 +35,23 @@ export class AuthService {
       throw new ConflictException('Email is already registered');
     }
 
+    const encryptedPhone = this.piiCrypto.encryptPhone(dto.phone);
+    const existingPhone =
+      await this.usersRepository.findByEncryptedPhone(encryptedPhone);
+
+    if (existingPhone) {
+      throw new ConflictException('Phone number is already registered');
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const verificationToken = generateVerificationToken();
-    const phonePlain = `pending:${randomUUID()}`;
 
     const user = await this.usersRepository.create({
       name: dto.name,
       email: this.piiCrypto.encryptEmail(dto.email),
       password: hashedPassword,
-      phone: this.piiCrypto.encryptPhone(phonePlain),
-      countryCode: 'XX',
+      phone: encryptedPhone,
+      countryCode: dto.countryCode.trim(),
       role: dto.role ?? Role.User,
       isEmailVerified: false,
       emailVerificationToken: verificationToken,
@@ -64,6 +70,8 @@ export class AuthService {
         id: user.id,
         name: user.name,
         email: dto.email,
+        phone: dto.phone,
+        countryCode: user.countryCode,
         role: user.role,
         isEmailVerified: user.isEmailVerified,
       },
