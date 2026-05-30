@@ -5,82 +5,49 @@ on:
     branches:
       - main
 
-env:
-  DEPLOY_PATH: /var/www/services/auth-service
-  HEALTH_URL: https://auth.algoarena.co.in/health
-
 jobs:
-  start:
-    name: 1 · Start deployment
+  deploy:
     runs-on: ubuntu-latest
-    steps:
-      - name: Print deployment info
-        run: |
-          echo "=========================================="
-          echo "Deploying auth-service to VPS"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Deploy path: ${{ env.DEPLOY_PATH }}"
-          echo "Health URL: ${{ env.HEALTH_URL }}"
-          echo "=========================================="
 
-  deploy-to-vps:
-    name: 2 · Deploy to VPS
-    needs: start
-    runs-on: ubuntu-latest
     steps:
-      - name: Run full deploy (single SSH session)
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT || 22 }}
-          timeout: 120s
-          command_timeout: 15m
+          port: ${{ secrets.VPS_SSH_PORT }}
           script_stop: true
+          command_timeout: 15m
+
           script: |
-            set -euo pipefail
-            cd ${{ env.DEPLOY_PATH }}
-            chmod +x scripts/deploy-remote.sh
-            bash scripts/deploy-remote.sh "${{ env.DEPLOY_PATH }}"
+            set -e
 
-  health-check:
-    name: 3 · Health check
-    needs: deploy-to-vps
-    runs-on: ubuntu-latest
-    steps:
-      - name: curl /health
-        run: |
-          echo ">>> Waiting for service to come up..."
-          sleep 5
-          echo ">>> Checking ${{ env.HEALTH_URL }}"
-          for attempt in 1 2 3 4 5; do
-            echo "--- Attempt $attempt/5 ---"
-            response=$(curl --silent --show-error --location --max-time 30 --write-out "\nHTTP_STATUS:%{http_code}" "${{ env.HEALTH_URL }}" || true)
-            body=$(echo "$response" | sed '/HTTP_STATUS:/d')
-            status=$(echo "$response" | grep HTTP_STATUS | cut -d: -f2)
-            echo "Status: $status"
-            echo "Body: $body"
-            if [ "$status" = "200" ] && echo "$body" | grep -q '"status"'; then
-              echo ">>> Health check passed."
-              exit 0
-            fi
-            echo ">>> Health check failed, retrying in 5s..."
-            sleep 5
-          done
-          echo ">>> Health check failed after 5 attempts."
-          exit 1
+            cd /var/www/services/auth-service
 
-  summary:
-    name: 4 · Deployment summary
-    needs: health-check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Success message
+            echo "Pulling latest code..."
+            git pull origin main
+
+            echo "Installing dependencies..."
+            npm install
+
+            echo "Generating Prisma..."
+            npx prisma generate --schema=db-schema/postgres/prisma/schema.prisma
+
+            echo "Building..."
+            npm run build
+
+            echo "Restarting PM2..."
+            pm2 restart auth-service --update-env || pm2 start ecosystem.config.js
+
+            pm2 save
+
+            echo "Local Health Check..."
+            curl --fail http://localhost:3302/health
+
+      - name: Public Health Check
         run: |
-          echo "=========================================="
-          echo "Deployment successful"
-          echo "Service: auth-service"
-          echo "Health:  ${{ env.HEALTH_URL }}"
-          echo "=========================================="
+          echo "Waiting for service..."
+          sleep 10
+
+          curl --fail https://auth.algoarena.co.in/health
