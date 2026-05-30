@@ -29,7 +29,7 @@ jobs:
             git pull origin main
 
             echo "Installing dependencies..."
-            npm install
+            npm ci
 
             echo "Generating Prisma..."
             npx prisma generate --schema=db-schema/postgres/prisma/schema.prisma
