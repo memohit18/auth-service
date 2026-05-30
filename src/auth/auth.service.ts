@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EmailService } from '../email/email.service';
 import { UsersService } from '../users/users.service';
-import { SignupDto } from './signup.dto';
+import { SignupDto } from './dto/signup.dto';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -21,5 +21,16 @@ export class AuthService {
         const newUser = await this.usersService.createUser({ name, email, password, emailVerificationToken: token });
         await this.emailService.sendVerificationEmail(email, newUser.emailVerificationToken ?? '');
         return newUser;
+    }
+
+    async verifyEmail(token: string) {
+        const user = await this.usersService.findByVerificationToken(token);
+        if (!user) {
+            throw new BadRequestException('Invalid or expired verification token');
+        }
+
+        await this.usersService.markEmailVerified(user.id);
+
+        return { message: 'Email verified successfully' };
     }
 }

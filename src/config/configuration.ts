@@ -11,4 +11,8 @@ export default () => ({
     verifyEmailUrl:
       process.env.VERIFY_EMAIL_URL ?? 'http://localhost:3000/verify-email',
   },
+  jwt: {
+    accessSecret: process.env.JWT_ACCESS_SECRET,
+    refreshSecret: process.env.JWT_REFRESH_SECRET,
+  },
 });

@@ -18,6 +18,26 @@ export class UsersService {
     });
   }
 
+  async findByVerificationToken(token: string) {
+    return this.prisma.user.findUnique({
+      where: {
+        emailVerificationToken: token,
+      },
+    });
+  }
+
+  async markEmailVerified(userId: string) {
+    return this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        isEmailVerified: true,
+        emailVerificationToken: null,
+      },
+    });
+  }
+
   async createUser(data: {
     name: string;
     email: string;
