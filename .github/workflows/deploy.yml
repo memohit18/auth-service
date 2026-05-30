@@ -1,0 +1,39 @@
+name: Deploy Auth Service
+
+on:
+push:
+branches:
+- main
+
+jobs:
+deploy:
+runs-on: ubuntu-latest
+
+```
+steps:
+  - name: Deploy to VPS
+    uses: appleboy/ssh-action@v1.0.3
+    with:
+      host: ${{ secrets.VPS_HOST }}
+      username: ${{ secrets.VPS_USER }}
+      key: ${{ secrets.VPS_SSH_KEY }}
+      script: |
+        cd /var/www/services/auth-service
+
+        git fetch origin
+        git reset --hard origin/main
+
+        npm install
+
+        npx prisma generate --schema=db-schema/postgres/prisma/schema.prisma
+
+        rm -rf dist
+        rm -f tsconfig.build.tsbuildinfo
+        rm -f tsconfig.tsbuildinfo
+
+        npm run build
+
+        pm2 restart auth-service --update-env
+
+        pm2 save
+```

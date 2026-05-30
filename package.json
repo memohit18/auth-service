@@ -1,14 +1,32 @@
 {
   "name": "auth-service",
   "version": "0.0.1",
-  "description": "",
+  "description": "NestJS authentication service",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "submodules": {
+    "db-schema": {
+      "path": "db-schema",
+      "repository": "git@github.com:memohit18/db-schema.git"
+    }
+  },
+  "prisma": {
+    "schema": "db-schema/postgres/prisma/schema.prisma",
+    "migrations": "db-schema/postgres/prisma/migrations"
+  },
   "scripts": {
-    "build": "nest build",
+    "submodule:init": "git submodule update --init --recursive",
+    "submodule:pull": "git submodule update --init --recursive --remote db-schema",
+    "pull": "git pull && npm run submodule:pull",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:prepare": "npm run prisma:generate && npm run prisma:migrate:deploy",
+    "prebuild": "npm run prisma:generate",
+    "build": "nest build",
+    "build:prod": "npm run prisma:migrate:deploy && npm run build",
+    "postinstall": "npm run submodule:init && npm run prisma:generate",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
