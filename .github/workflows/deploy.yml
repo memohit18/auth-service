@@ -5,12 +5,25 @@ on:
     branches:
       - main
 
+env:
+  DEPLOY_PATH: /var/www/services/auth-service
+  HEALTH_URL: https://auth.algoarena.co.in/health
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to VPS
+      - name: Start deployment
+        run: |
+          echo "=========================================="
+          echo "Deploying auth-service to VPS"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Health URL: ${{ secrets.HEALTH_URL }}"
+          echo "=========================================="
+
+      - name: Sync code & db-schema submodule
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -19,27 +32,97 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            cd /var/www/services/auth-service
-
+            echo ">>> Syncing repository..."
+            cd ${{ secrets.DEPLOY_PATH }}
             git fetch origin
             git reset --hard origin/main
+            echo ">>> Pulling latest db-schema submodule..."
             npm run submodule:pull
+            echo ">>> Code sync complete."
+            git log -1 --oneline
 
+      - name: Install dependencies
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo ">>> Installing npm dependencies..."
+            cd ${{ env.DEPLOY_PATH }}
             npm ci
+            echo ">>> Dependencies installed."
+
+      - name: Build for production
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo ">>> Cleaning old build artifacts..."
+            cd ${{ env.DEPLOY_PATH }}
             rm -rf dist
             rm -f tsconfig.build.tsbuildinfo
             rm -f tsconfig.tsbuildinfo
-
+            echo ">>> Running prisma migrate deploy + build..."
             npm run build:prod
-
             test -f dist/main.js
+            echo ">>> Build complete: dist/main.js exists."
 
+      - name: Restart PM2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo ">>> Restarting auth-service with PM2..."
+            cd ${{ env.DEPLOY_PATH }}
             if pm2 describe auth-service > /dev/null 2>&1; then
               pm2 reload ecosystem.config.js --update-env
+              echo ">>> PM2 reloaded existing process."
             else
               pm2 start ecosystem.config.js
+              echo ">>> PM2 started new process."
             fi
-
             pm2 save
+            pm2 list
+            echo ">>> PM2 restart complete."
 
-            echo "Deploy complete."
+      - name: Health check
+        run: |
+          echo ">>> Waiting for service to come up..."
+          sleep 5
+          echo ">>> Checking ${{ env.HEALTH_URL }}"
+          for attempt in 1 2 3 4 5; do
+            echo "--- Attempt $attempt/5 ---"
+            response=$(curl --silent --show-error --location --write-out "\nHTTP_STATUS:%{http_code}" "${{ env.HEALTH_URL }}" || true)
+            body=$(echo "$response" | sed '/HTTP_STATUS:/d')
+            status=$(echo "$response" | grep HTTP_STATUS | cut -d: -f2)
+            echo "Status: $status"
+            echo "Body: $body"
+            if [ "$status" = "200" ] && echo "$body" | grep -q '"status"'; then
+              echo ">>> Health check passed."
+              exit 0
+            fi
+            echo ">>> Health check failed, retrying in 5s..."
+            sleep 5
+          done
+          echo ">>> Health check failed after 5 attempts."
+          exit 1
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "=========================================="
+          echo "Deployment successful"
+          echo "Service: auth-service"
+          echo "Health:  ${{ env.HEALTH_URL }}"
+          echo "=========================================="
