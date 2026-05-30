@@ -37,4 +37,10 @@ export class JwtTokenService {
       expiresIn: '30d',
     });
   }
+
+  async verifyRefreshToken(token: string) {
+    return this.jwtService.verifyAsync<RefreshTokenPayload>(token, {
+      secret: this.config.jwt.refreshSecret,
+    });
+  }
 }

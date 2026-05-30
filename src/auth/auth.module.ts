@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { RefreshTokensModule } from '../refresh-tokens/refresh-tokens.module';
+import { SessionsModule } from '../sessions/sessions.module';
 import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
 import { APP_CONFIG, AppConfig } from '../config/config.module';
@@ -14,6 +16,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   imports: [
     UsersModule,
     EmailModule,
+    RefreshTokensModule,
+    SessionsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [APP_CONFIG],
