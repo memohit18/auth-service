@@ -1,39 +1,45 @@
 name: Deploy Auth Service
 
 on:
-push:
-branches:
-- main
+  push:
+    branches:
+      - main
 
 jobs:
-deploy:
-runs-on: ubuntu-latest
+  deploy:
+    runs-on: ubuntu-latest
 
-```
-steps:
-  - name: Deploy to VPS
-    uses: appleboy/ssh-action@v1.0.3
-    with:
-      host: ${{ secrets.VPS_HOST }}
-      username: ${{ secrets.VPS_USER }}
-      key: ${{ secrets.VPS_SSH_KEY }}
-      script: |
-        cd /var/www/services/auth-service
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /var/www/services/auth-service
 
-        git fetch origin
-        git reset --hard origin/main
+            git fetch origin
+            git reset --hard origin/main
+            npm run submodule:pull
 
-        npm install
+            npm ci
+            rm -rf dist
+            rm -f tsconfig.build.tsbuildinfo
+            rm -f tsconfig.tsbuildinfo
 
-        npx prisma generate --schema=db-schema/postgres/prisma/schema.prisma
+            npm run build:prod
 
-        rm -rf dist
-        rm -f tsconfig.build.tsbuildinfo
-        rm -f tsconfig.tsbuildinfo
+            test -f dist/main.js
 
-        npm run build
+            if pm2 describe auth-service > /dev/null 2>&1; then
+              pm2 reload ecosystem.config.js --update-env
+            else
+              pm2 start ecosystem.config.js
+            fi
 
-        pm2 restart auth-service --update-env
+            pm2 save
 
-        pm2 save
-```
+            echo "Deploy complete."
