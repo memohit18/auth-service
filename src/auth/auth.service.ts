@@ -9,7 +9,7 @@ import { EmailService } from '../email/email.service';
 import { RefreshTokensService } from '../refresh-tokens/refresh-tokens.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { UsersService } from '../users/users.service';
-import { GoogleLoginDto, LoginDto, SignupDto } from './dto';
+import { GoogleLoginDto, LoginDto, SignupDto, UpdateUserDto } from './dto';
 import { GoogleService } from './services/google.service';
 import { JwtTokenService } from './services/jwt-token.service';
 
@@ -225,14 +225,14 @@ export class AuthService {
 
   async getMe(userId: string) {
     const user = await this.usersService.findById(userId);
-    if (!user) {
+    if (!user || user.isDeleted) {
       throw new UnauthorizedException();
     }
 
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-    };
+    return this.usersService.toPublicProfile(user);
+  }
+
+  async updateMe(userId: string, dto: UpdateUserDto) {
+    return this.usersService.updateProfile(userId, dto);
   }
 }
