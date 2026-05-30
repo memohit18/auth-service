@@ -1,4 +1,10 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class LoginDto {
   @IsEmail()
@@ -8,4 +14,13 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty()
   password: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['web', 'mobile'])
+  deviceType?: 'web' | 'mobile';
+
+  @IsOptional()
+  @IsString()
+  deviceName?: string;
 }

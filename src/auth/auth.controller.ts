@@ -3,6 +3,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AuthService } from './auth.service';
 import {
+  GoogleLoginDto,
   LoginDto,
   LogoutDto,
   RefreshTokenDto,
@@ -28,6 +29,11 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Post('google')
+  googleLogin(@Body() dto: GoogleLoginDto) {
+    return this.authService.googleLogin(dto);
   }
 
   @Post('refresh')

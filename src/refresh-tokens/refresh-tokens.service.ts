@@ -6,7 +6,12 @@ import { PrismaService } from '../prisma/prisma.service';
 export class RefreshTokensService {
   constructor(private prisma: PrismaService) {}
 
-  async create(userId: string, refreshToken: string, expiresAt: Date) {
+  async create(
+    userId: string,
+    refreshToken: string,
+    expiresAt: Date,
+    deviceId?: string,
+  ) {
     const hash = await argon2.hash(refreshToken);
 
     return this.prisma.refreshToken.create({
@@ -14,6 +19,7 @@ export class RefreshTokensService {
         userId,
         tokenHash: hash,
         expiresAt,
+        deviceId,
       },
     });
   }
@@ -54,6 +60,11 @@ export class RefreshTokensService {
     }
 
     await this.delete(existing.id);
-    return this.create(userId, newRefreshToken, expiresAt);
+    return this.create(
+      userId,
+      newRefreshToken,
+      expiresAt,
+      existing.deviceId ?? undefined,
+    );
   }
 }

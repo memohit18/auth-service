@@ -53,6 +53,8 @@ export class UsersService {
     provider?: string;
     providerId?: string;
     emailVerificationToken?: string;
+    avatar?: string;
+    isEmailVerified?: boolean;
   }) {
     const { password, ...rest } = data;
 

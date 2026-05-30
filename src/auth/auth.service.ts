@@ -9,8 +9,14 @@ import { EmailService } from '../email/email.service';
 import { RefreshTokensService } from '../refresh-tokens/refresh-tokens.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { UsersService } from '../users/users.service';
-import { LoginDto, SignupDto } from './dto';
+import { GoogleLoginDto, LoginDto, SignupDto } from './dto';
+import { GoogleService } from './services/google.service';
 import { JwtTokenService } from './services/jwt-token.service';
+
+type DeviceInfo = {
+  deviceType: 'web' | 'mobile';
+  deviceName?: string;
+};
 
 @Injectable()
 export class AuthService {
@@ -20,7 +26,49 @@ export class AuthService {
     private jwtTokenService: JwtTokenService,
     private refreshTokensService: RefreshTokensService,
     private sessionsService: SessionsService,
+    private googleService: GoogleService,
   ) {}
+
+  private resolveDevice(dto: {
+    deviceType?: 'web' | 'mobile';
+    deviceName?: string;
+  }): DeviceInfo {
+    const deviceType = dto.deviceType ?? 'web';
+    const deviceName =
+      dto.deviceName ?? (deviceType === 'mobile' ? 'Mobile App' : 'Chrome');
+
+    return { deviceType, deviceName };
+  }
+
+  private async issueTokens(
+    user: { id: string; email: string; role: string },
+    device: DeviceInfo,
+  ) {
+    const accessToken = await this.jwtTokenService.generateAccessToken({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const refreshToken = await this.jwtTokenService.generateRefreshToken({
+      sub: user.id,
+    });
+
+    const session = await this.sessionsService.create({
+      userId: user.id,
+      deviceType: device.deviceType,
+      deviceName: device.deviceName,
+    });
+
+    await this.refreshTokensService.create(
+      user.id,
+      refreshToken,
+      this.getRefreshTokenExpiry(),
+      session.id,
+    );
+
+    return { accessToken, refreshToken };
+  }
 
   private getRefreshTokenExpiry() {
     const expiryDate = new Date();
@@ -45,7 +93,15 @@ export class AuthService {
       email,
       newUser.emailVerificationToken ?? '',
     );
-    return newUser;
+
+    return {
+      id: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      isEmailVerified: newUser.isEmailVerified,
+      createdAt: newUser.createdAt,
+    };
   }
 
   async verifyEmail(token: string) {
@@ -74,37 +130,26 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    };
+    return this.issueTokens(user, this.resolveDevice(dto));
+  }
 
-    const accessToken =
-      await this.jwtTokenService.generateAccessToken(payload);
+  async googleLogin(dto: GoogleLoginDto) {
+    const googleUser = await this.googleService.verifyGoogleToken(dto.idToken);
 
-    const refreshToken = await this.jwtTokenService.generateRefreshToken({
-      sub: user.id,
-    });
+    let user = await this.usersService.findByEmail(googleUser.email);
 
-    const expiryDate = this.getRefreshTokenExpiry();
+    if (!user) {
+      user = await this.usersService.createUser({
+        name: googleUser.name,
+        email: googleUser.email,
+        provider: 'google',
+        providerId: googleUser.sub,
+        avatar: googleUser.picture,
+        isEmailVerified: true,
+      });
+    }
 
-    await this.refreshTokensService.create(
-      user.id,
-      refreshToken,
-      expiryDate,
-    );
-
-    await this.sessionsService.create({
-      userId: user.id,
-      deviceType: 'web',
-      deviceName: 'Chrome',
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-    };
+    return this.issueTokens(user, this.resolveDevice(dto));
   }
 
   async refresh(refreshToken: string) {
@@ -144,6 +189,7 @@ export class AuthService {
       user.id,
       newRefreshToken,
       this.getRefreshTokenExpiry(),
+      storedToken.deviceId ?? undefined,
     );
 
     return {
@@ -169,7 +215,10 @@ export class AuthService {
     }
 
     await this.refreshTokensService.delete(storedToken.id);
-    await this.sessionsService.deleteLatestForUser(payload.sub);
+
+    if (storedToken.deviceId) {
+      await this.sessionsService.delete(storedToken.deviceId);
+    }
 
     return { message: 'Logged out successfully' };
   }
