@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { EmailService } from 'src/email/email.service';
-import { UsersService } from 'src/users/users.service';
+import { EmailService } from '../email/email.service';
+import { UsersService } from '../users/users.service';
 import { SignupDto } from './signup.dto';
 import * as crypto from 'crypto';
 

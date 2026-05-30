@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -25,8 +26,15 @@ export class UsersService {
     providerId?: string;
     emailVerificationToken?: string;
   }) {
+    const { password, ...rest } = data;
+
     return this.prisma.user.create({
-      data,
+      data: {
+        ...rest,
+        ...(password !== undefined && {
+          password: await argon2.hash(password),
+        }),
+      },
     });
   }
 }

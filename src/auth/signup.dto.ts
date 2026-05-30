@@ -1,16 +1,25 @@
 import {
-    IsEmail,
-    IsString,
-    MinLength,
-  } from 'class-validator';
-  
-  export class SignupDto {
-    @IsString()
-    name: string;
-  
-    @IsEmail()
-    email: string;
-  
-    @MinLength(8)
-    password: string;
-  }
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+
+export class SignupDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(2)
+  @MaxLength(100)
+  name: string;
+
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8)
+  @MaxLength(128)
+  password: string;
+}
