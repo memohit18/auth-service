@@ -72,3 +72,9 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # NestJS / tooling
 .turbo
+
+
+dist/
+*.tsbuildinfo
+node_modules/
+.env

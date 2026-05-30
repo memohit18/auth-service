@@ -34,6 +34,10 @@ jobs:
             echo "Generating Prisma..."
             npx prisma generate --schema=db-schema/postgres/prisma/schema.prisma
 
+            echo "Cleaning build cache..."
+            rm -rf dist
+            rm -f tsconfig.build.tsbuildinfo
+
             echo "Building..."
             npm run build
 
@@ -41,6 +45,9 @@ jobs:
             pm2 restart auth-service --update-env || pm2 start ecosystem.config.js
 
             pm2 save
+
+            echo "Waiting for service..."
+            sleep 10
 
             echo "Local Health Check..."
             curl --fail http://localhost:3302/health
