@@ -1,7 +1,10 @@
 # compiled output
 /dist
-/node_modules
 /build
+/node_modules
+
+# TypeScript
+*.tsbuildinfo
 
 # Logs
 logs
@@ -14,6 +17,7 @@ lerna-debug.log*
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Tests
 /coverage
@@ -28,23 +32,30 @@ lerna-debug.log*
 .settings/
 *.sublime-workspace
 
-# IDE - VSCode
+# IDE - VSCode (keep shared workspace settings)
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 
-# dotenv environment variable files
+# Environment & secrets (never commit real values)
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env.*
+!.env.example
+!.env.sample
 
-# temp directory
+# Credentials & keys
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# temp / cache
 .temp
 .tmp
+.cache
+.eslintcache
 
 # Runtime data
 pids
@@ -54,3 +65,10 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Prisma (generated client lives in node_modules; local scratch only)
+/prisma/*.db
+/prisma/*.db-journal
+
+# NestJS / tooling
+.turbo
