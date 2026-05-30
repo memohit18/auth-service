@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'auth-service',
-      script: 'dist/main.js',
-      cwd: __dirname,
+      cwd: '/var/www/services/auth-service',
+      script: './dist/main.js',
       instances: 1,
       autorestart: true,
       watch: false,
