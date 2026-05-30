@@ -10,20 +10,26 @@ env:
   HEALTH_URL: https://auth.algoarena.co.in/health
 
 jobs:
-  deploy:
+  start:
+    name: 1 · Start deployment
     runs-on: ubuntu-latest
-
     steps:
-      - name: Start deployment
+      - name: Print deployment info
         run: |
           echo "=========================================="
           echo "Deploying auth-service to VPS"
           echo "Branch: ${{ github.ref_name }}"
           echo "Commit: ${{ github.sha }}"
-          echo "Health URL: ${{ secrets.HEALTH_URL }}"
+          echo "Deploy path: ${{ env.DEPLOY_PATH }}"
+          echo "Health URL: ${{ env.HEALTH_URL }}"
           echo "=========================================="
 
-      - name: Sync code & db-schema submodule
+  sync-code:
+    name: 2 · Sync code & submodule
+    needs: start
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git pull + db-schema submodule
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -33,15 +39,20 @@ jobs:
           script: |
             set -euo pipefail
             echo ">>> Syncing repository..."
-            cd ${{ secrets.DEPLOY_PATH }}
+            cd ${{ env.DEPLOY_PATH }}
             git fetch origin
             git reset --hard origin/main
             echo ">>> Pulling latest db-schema submodule..."
             npm run submodule:pull
-            echo ">>> Code sync complete."
             git log -1 --oneline
+            echo ">>> Code sync complete."
 
-      - name: Install dependencies
+  install-dependencies:
+    name: 3 · Install dependencies
+    needs: sync-code
+    runs-on: ubuntu-latest
+    steps:
+      - name: npm ci
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -55,7 +66,12 @@ jobs:
             npm ci
             echo ">>> Dependencies installed."
 
-      - name: Build for production
+  build-production:
+    name: 4 · Build production
+    needs: install-dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clean artifacts
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -69,12 +85,30 @@ jobs:
             rm -rf dist
             rm -f tsconfig.build.tsbuildinfo
             rm -f tsconfig.tsbuildinfo
+            echo ">>> Clean complete."
+
+      - name: Prisma migrate + Nest build
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 10m
+          script_stop: true
+          script: |
+            set -euo pipefail
             echo ">>> Running prisma migrate deploy + build..."
+            cd ${{ env.DEPLOY_PATH }}
             npm run build:prod
             test -f dist/main.js
             echo ">>> Build complete: dist/main.js exists."
 
-      - name: Restart PM2
+  verify-runtime:
+    name: 5 · Verify Node & PM2
+    needs: build-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check node, pm2, and build artifact
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -83,20 +117,53 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            echo ">>> Restarting auth-service with PM2..."
             cd ${{ env.DEPLOY_PATH }}
-            if pm2 describe auth-service > /dev/null 2>&1; then
-              pm2 reload ecosystem.config.js --update-env
-              echo ">>> PM2 reloaded existing process."
-            else
-              pm2 start ecosystem.config.js
-              echo ">>> PM2 started new process."
-            fi
-            pm2 save
-            pm2 list
-            echo ">>> PM2 restart complete."
+            chmod +x scripts/pm2-env.sh
+            bash -c 'source scripts/pm2-env.sh && test -f dist/main.js && echo ">>> Runtime check passed."'
 
-      - name: Health check
+  restart-pm2:
+    name: 6 · Restart PM2 process
+    needs: verify-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restart or start auth-service
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 5m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ env.DEPLOY_PATH }}
+            chmod +x scripts/pm2-restart-app.sh
+            bash scripts/pm2-restart-app.sh
+
+  pm2-status:
+    name: 7 · PM2 save & status
+    needs: restart-pm2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Save PM2 process list
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ env.DEPLOY_PATH }}
+            chmod +x scripts/pm2-save-status.sh
+            bash scripts/pm2-save-status.sh
+
+  health-check:
+    name: 8 · Health check
+    needs: pm2-status
+    runs-on: ubuntu-latest
+    steps:
+      - name: curl /health
         run: |
           echo ">>> Waiting for service to come up..."
           sleep 5
@@ -118,8 +185,12 @@ jobs:
           echo ">>> Health check failed after 5 attempts."
           exit 1
 
-      - name: Deployment summary
-        if: success()
+  summary:
+    name: 9 · Deployment summary
+    needs: health-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Success message
         run: |
           echo "=========================================="
           echo "Deployment successful"
