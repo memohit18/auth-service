@@ -1,14 +1,16 @@
 {
   "info": {
     "name": "Auth Service",
-    "description": "Auth service API — signup through login, tokens, Google OAuth, profile.\n\nImport this collection into Postman or Insomnia.\n\nSet collection variables:\n- baseUrl (default http://localhost:3302)\n- accessToken / refreshToken (auto-set after login, google, refresh)\n- verificationToken (from verification email after signup)",
+    "description": "Complete Auth Service API collection.\n\n## Collection variables\n| Variable | Description |\n|----------|-------------|\n| `baseUrl` | API base URL (local: `http://localhost:3302`, prod: `https://auth.algoarena.co.in`) |\n| `accessToken` | Auto-set after login / google / refresh |\n| `refreshToken` | Auto-set after login / google / refresh |\n| `verificationToken` | UUID from verification email link (`?token=...`) |\n| `googleWebIdToken` | Google Sign-In ID token from web client |\n| `googleIosIdToken` | Google Sign-In ID token from iOS client |\n\n## Env vars (server)\n`DATABASE_URL`, `RESEND_API_KEY`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `VERIFY_EMAIL_URL`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:3302" },
     { "key": "accessToken", "value": "" },
     { "key": "refreshToken", "value": "" },
-    { "key": "verificationToken", "value": "" }
+    { "key": "verificationToken", "value": "550e8400-e29b-41d4-a716-446655440000" },
+    { "key": "googleWebIdToken", "value": "PASTE_GOOGLE_WEB_ID_TOKEN_HERE" },
+    { "key": "googleIosIdToken", "value": "PASTE_GOOGLE_IOS_ID_TOKEN_HERE" }
   ],
   "item": [
     {
@@ -20,8 +22,9 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/health",
-            "description": "Liveness check. No auth required."
-          }
+            "description": "Liveness check.\n\n**Auth:** None\n\n**Response `200`:**\n```json\n{ \"status\": \"ok\" }\n```"
+          },
+          "response": []
         }
       ]
     },
@@ -32,27 +35,64 @@
           "name": "Signup",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Mohit Kumar\",\n  \"email\": \"mohit@example.com\",\n  \"password\": \"password123\"\n}"
+              "raw": "{\n  \"name\": \"Mohit Kumar\",\n  \"email\": \"mohit@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/auth/signup",
-            "description": "Register with email/password.\n\nRequires env: DATABASE_URL, RESEND_API_KEY\n\nSends verification email. Response excludes password and verification token."
-          }
+            "description": "Register with email and password. Sends verification email.\n\n**Auth:** None\n\n**Requires server env:** `DATABASE_URL`, `RESEND_API_KEY`, `RESEND_FROM`, `VERIFY_EMAIL_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `name` | string | Yes | 2–100 chars |\n| `email` | string | Yes | Valid email, must be unique |\n| `password` | string | Yes | 8–128 chars |\n\n**Response `201`:**\n```json\n{\n  \"id\": \"uuid\",\n  \"name\": \"Mohit Kumar\",\n  \"email\": \"mohit@example.com\",\n  \"role\": \"user\",\n  \"isEmailVerified\": false,\n  \"createdAt\": \"2026-05-31T...\"\n}\n```\n\n**Errors:** `400` user already exists, `500` email send failure"
+          },
+          "response": []
         },
         {
-          "name": "Verify Email",
+          "name": "Verify Email (Browser — GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email?token={{verificationToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify-email"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{verificationToken}}",
+                  "description": "UUID from verification email link"
+                }
+              ]
+            },
+            "description": "Verify email via browser link (same as clicking the email button).\n\n**Auth:** None\n\n**Requires server env:** `DATABASE_URL`\n\n| Param | Type | Required | Rules |\n|-------|------|----------|-------|\n| `token` | query string | Yes | UUID from verification email |\n\n**Response `200`:** HTML success page — \"Email verified\"\n\n**Response `400`:** HTML error page\n\nSet `verificationToken` from the email link: `?token=<uuid>`"
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email (API — POST)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}"
+              "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/auth/verify-email",
-            "description": "Confirm email with UUID token from verification email.\n\nRequires env: DATABASE_URL"
-          }
+            "description": "Verify email via JSON API (Postman / mobile apps).\n\n**Auth:** None\n\n**Requires server env:** `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `token` | string | Yes | UUID from verification email |\n\n**Response `200`:**\n```json\n{ \"message\": \"Email verified successfully\" }\n```\n\n**Errors:** `400` invalid or expired token"
+          },
+          "response": []
         }
       ]
     },
@@ -78,14 +118,22 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"mohit@example.com\",\n  \"password\": \"password123\",\n  \"deviceType\": \"web\",\n  \"deviceName\": \"Chrome\"\n}"
+              "raw": "{\n  \"email\": \"mohit@example.com\",\n  \"password\": \"password123\",\n  \"deviceType\": \"web\",\n  \"deviceName\": \"Chrome\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/auth/login",
-            "description": "Email/password login.\n\nRequires: verified email, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, DATABASE_URL\n\nOptional: deviceType (web|mobile), deviceName"
-          }
+            "description": "Email/password login for web clients.\n\n**Auth:** None\n\n**Requires server env:** `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `email` | string | Yes | Valid email |\n| `password` | string | Yes | Plain text password |\n| `deviceType` | string | No | `web` or `mobile` (default: `web`) |\n| `deviceName` | string | No | Default: `Chrome` when deviceType is web |\n\n**Response `200`:**\n```json\n{\n  \"accessToken\": \"eyJhbGciOiJIUzI1NiIs...\",\n  \"refreshToken\": \"eyJhbGciOiJIUzI1NiIs...\"\n}\n```\n\n**Errors:** `401` invalid credentials, `400` email not verified"
+          },
+          "response": []
         },
         {
           "name": "Login (Mobile)",
@@ -106,16 +154,25 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"mohit@example.com\",\n  \"password\": \"password123\",\n  \"deviceType\": \"mobile\",\n  \"deviceName\": \"iPhone 15\"\n}"
+              "raw": "{\n  \"email\": \"mohit@example.com\",\n  \"password\": \"password123\",\n  \"deviceType\": \"mobile\",\n  \"deviceName\": \"iPhone 15 Pro\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": "{{baseUrl}}/auth/login"
-          }
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Email/password login for mobile clients.\n\n**Auth:** None\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `email` | string | Yes | Valid email |\n| `password` | string | Yes | Plain text password |\n| `deviceType` | string | No | Set to `mobile` |\n| `deviceName` | string | No | Default: `Mobile App` when deviceType is mobile |\n\n**Response `200`:** Same as web login — access + refresh tokens"
+          },
+          "response": []
         },
         {
-          "name": "Google Login",
+          "name": "Google Login (Web)",
           "event": [
             {
               "listen": "test",
@@ -133,14 +190,58 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"idToken\": \"PASTE_GOOGLE_ID_TOKEN_HERE\",\n  \"deviceType\": \"web\",\n  \"deviceName\": \"Chrome\"\n}"
+              "raw": "{\n  \"idToken\": \"{{googleWebIdToken}}\",\n  \"deviceType\": \"web\",\n  \"deviceName\": \"Chrome\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/auth/google",
-            "description": "Google Sign-In with idToken (NOT access token).\n\nRequires env: GOOGLE_CLIENT_ID, JWT secrets, DATABASE_URL"
-          }
+            "description": "Google Sign-In for web using ID token.\n\n**Auth:** None\n\n**Requires server env:** `GOOGLE_CLIENT_ID`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google **ID token** (NOT access token). Token `aud` must match `GOOGLE_CLIENT_ID` |\n| `deviceType` | string | No | `web` or `mobile` (default: `web`) |\n| `deviceName` | string | No | Device label for session tracking |\n\n**Response `200`:**\n```json\n{\n  \"accessToken\": \"eyJhbGciOiJIUzI1NiIs...\",\n  \"refreshToken\": \"eyJhbGciOiJIUzI1NiIs...\"\n}\n```\n\nNew users are created with `provider=google`, `isEmailVerified=true`.\n\n**Errors:** `401` invalid Google token"
+          },
+          "response": []
+        },
+        {
+          "name": "Google Login (iOS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.accessToken) pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "  if (json.refreshToken) pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"{{googleIosIdToken}}\",\n  \"deviceType\": \"mobile\",\n  \"deviceName\": \"iPhone 15 Pro\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/auth/google",
+            "description": "Google Sign-In for iOS using ID token.\n\n**Auth:** None\n\n**Requires server env:** `GOOGLE_IOS_CLIENT_ID`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google **ID token** from iOS SDK. Token `aud` must match `GOOGLE_IOS_CLIENT_ID` |\n| `deviceType` | string | No | Set to `mobile` for iOS |\n| `deviceName` | string | No | e.g. `iPhone 15 Pro` |\n\n**Response `200`:** Same as web Google login — access + refresh tokens\n\n**Errors:** `401` invalid Google token (wrong client ID / expired token)"
+          },
+          "response": []
         }
       ]
     },
@@ -166,27 +267,43 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/auth/refresh",
-            "description": "Rotate tokens. Old refresh token becomes invalid."
-          }
+            "description": "Rotate access and refresh tokens.\n\n**Auth:** None (uses refresh token in body)\n\n**Requires server env:** `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `refreshToken` | string | Yes | Current valid refresh token |\n\n**Response `200`:**\n```json\n{\n  \"accessToken\": \"eyJhbGciOiJIUzI1NiIs...\",\n  \"refreshToken\": \"eyJhbGciOiJIUzI1NiIs...\"\n}\n```\n\nOld refresh token is invalidated after rotation.\n\n**Errors:** `401` invalid or expired refresh token"
+          },
+          "response": []
         },
         {
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/auth/logout",
-            "description": "Revoke refresh token and linked session."
-          }
+            "description": "Revoke refresh token and delete linked session.\n\n**Auth:** None (uses refresh token in body)\n\n**Requires server env:** `JWT_REFRESH_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `refreshToken` | string | Yes | Refresh token to revoke |\n\n**Response `200`:**\n```json\n{ \"message\": \"Logged out successfully\" }\n```\n\n**Errors:** `401` invalid refresh token"
+          },
+          "response": []
         }
       ]
     },
@@ -198,11 +315,16 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token"
+              }
             ],
             "url": "{{baseUrl}}/auth/me",
-            "description": "Get logged-in user profile.\n\nRequires: JWT_ACCESS_SECRET\n\nHeader: Authorization Bearer accessToken"
-          }
+            "description": "Get logged-in user profile.\n\n**Auth:** Bearer `accessToken`\n\n**Requires server env:** `JWT_ACCESS_SECRET`\n\n**Headers:**\n| Header | Value |\n|--------|-------|\n| `Authorization` | `Bearer {{accessToken}}` |\n\n**Response `200`:** Public user profile (no password hash)\n\n**Errors:** `401` missing or invalid token"
+          },
+          "response": []
         },
         {
           "name": "Update Current User",
@@ -210,15 +332,40 @@
             "method": "PATCH",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "JWT access token"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Mohit Kumar\",\n  \"phone\": \"9876543210\",\n  \"countryCode\": \"+91\",\n  \"avatar\": \"https://example.com/avatar.png\"\n}"
+              "raw": "{\n  \"name\": \"Mohit Kumar\",\n  \"phone\": \"9876543210\",\n  \"countryCode\": \"+91\",\n  \"avatar\": \"https://example.com/avatar.png\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/auth/me",
-            "description": "Update profile fields (all optional).\n\nUpdatable: name, phone, countryCode, avatar\n\nNot updatable via this endpoint: email, password, role, provider\n\nRequires: JWT_ACCESS_SECRET + Bearer accessToken"
-          }
+            "description": "Update current user profile. All body fields are optional — send only fields you want to change.\n\n**Auth:** Bearer `accessToken`\n\n**Requires server env:** `JWT_ACCESS_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `name` | string | No | 2–100 chars |\n| `phone` | string | No | Max 20 chars |\n| `countryCode` | string | No | Max 10 chars, e.g. `+91` |\n| `avatar` | string | No | Max 500 chars, URL |\n\n**Not updatable here:** `email`, `password`, `role`, `provider`\n\n**Response `200`:** Updated public user profile\n\n**Errors:** `401` unauthorized"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/users",
+            "description": "List all non-deleted users.\n\n**Auth:** None\n\n**Requires server env:** `DATABASE_URL`\n\n**Response `200`:** Array of user records from database\n\n**Note:** Returns raw user objects — use with caution in production."
+          },
+          "response": []
         }
       ]
     }

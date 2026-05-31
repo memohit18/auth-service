@@ -17,15 +17,27 @@ export type GoogleUserProfile = {
 @Injectable()
 export class GoogleService {
   private readonly client: OAuth2Client;
+  private readonly audiences: string[];
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {
+    this.audiences = [
+      this.config.google.clientId,
+      this.config.google.iosClientId,
+    ].filter((clientId): clientId is string => Boolean(clientId));
+
+    if (this.audiences.length === 0) {
+      throw new Error(
+        'At least one Google client ID must be configured (GOOGLE_CLIENT_ID or GOOGLE_IOS_CLIENT_ID)',
+      );
+    }
+
     this.client = new OAuth2Client(this.config.google.clientId);
   }
 
   async verifyGoogleToken(idToken: string): Promise<GoogleUserProfile> {
     const ticket = await this.client.verifyIdToken({
       idToken,
-      audience: this.config.google.clientId,
+      audience: this.audiences,
     });
 
     const payload = ticket.getPayload();

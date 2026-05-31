@@ -18,6 +18,7 @@ export default () => ({
   },
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
+    iosClientId: process.env.GOOGLE_IOS_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   },
 });
