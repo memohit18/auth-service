@@ -9,7 +9,8 @@ export default () => ({
   },
   app: {
     verifyEmailUrl:
-      process.env.VERIFY_EMAIL_URL ?? 'http://localhost:3000/verify-email',
+      process.env.VERIFY_EMAIL_URL ??
+      'http://localhost:3302/auth/verify-email',
   },
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,

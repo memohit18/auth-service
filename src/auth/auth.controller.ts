@@ -1,4 +1,17 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpException,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
+import { isUUID } from 'class-validator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AuthService } from './auth.service';
@@ -12,6 +25,10 @@ import {
   VerifyEmailDto,
 } from './dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import {
+  verifyEmailErrorPage,
+  verifyEmailSuccessPage,
+} from './verify-email.page';
 
 @Controller('auth')
 export class AuthController {
@@ -22,9 +39,59 @@ export class AuthController {
     return this.authService.signup(dto);
   }
 
+  @Get('verify-email')
+  async verifyEmailPage(
+    @Query('token') token: string | undefined,
+    @Res() res: Response,
+  ) {
+    if (!token || !isUUID(token)) {
+      return res
+        .status(400)
+        .type('text/html')
+        .send(
+          verifyEmailErrorPage('Invalid or missing verification token.'),
+        );
+    }
+
+    try {
+      await this.authService.verifyEmail(token);
+      return res.type('text/html').send(verifyEmailSuccessPage());
+    } catch (error) {
+      const message = this.getVerifyEmailErrorMessage(error);
+      return res
+        .status(400)
+        .type('text/html')
+        .send(verifyEmailErrorPage(message));
+    }
+  }
+
   @Post('verify-email')
   verifyEmail(@Body() dto: VerifyEmailDto) {
     return this.authService.verifyEmail(dto.token);
+  }
+
+  private getVerifyEmailErrorMessage(error: unknown) {
+    if (error instanceof BadRequestException) {
+      const response = error.getResponse();
+      if (typeof response === 'string') {
+        return response;
+      }
+
+      if (
+        typeof response === 'object' &&
+        response !== null &&
+        'message' in response &&
+        typeof response.message === 'string'
+      ) {
+        return response.message;
+      }
+    }
+
+    if (error instanceof HttpException) {
+      return 'Verification failed. Please request a new verification email.';
+    }
+
+    return 'Verification failed. Please try again later.';
   }
 
   @Post('login')

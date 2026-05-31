@@ -92,6 +92,7 @@ export class AuthService {
     await this.emailService.sendVerificationEmail(
       email,
       newUser.emailVerificationToken ?? '',
+      name,
     );
 
     return {
