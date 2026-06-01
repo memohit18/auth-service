@@ -57,6 +57,21 @@ export class UsersService {
     });
   }
 
+  async syncGoogleProfile(
+    userId: string,
+    data: { name: string; avatar?: string; providerId: string },
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: data.name,
+        avatar: data.avatar,
+        providerId: data.providerId,
+        isEmailVerified: true,
+      },
+    });
+  }
+
   toPublicProfile(user: {
     id: string;
     name: string;

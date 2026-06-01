@@ -99,9 +99,19 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  @Post('google')
+  @Post('google/signup')
+  googleSignup(@Body() dto: GoogleLoginDto) {
+    return this.authService.googleSignup(dto);
+  }
+
+  @Post('google/login')
   googleLogin(@Body() dto: GoogleLoginDto) {
     return this.authService.googleLogin(dto);
+  }
+
+  @Post('google')
+  googleLoginLegacy(@Body() dto: GoogleLoginDto) {
+    return this.authService.googleLoginOrSignup(dto);
   }
 
   @Post('refresh')

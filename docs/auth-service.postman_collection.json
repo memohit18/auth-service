@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Auth Service",
-    "description": "Complete Auth Service API collection.\n\n## Collection variables\n| Variable | Description |\n|----------|-------------|\n| `baseUrl` | API base URL (local: `http://localhost:3302`, prod: `https://auth.algoarena.co.in`) |\n| `accessToken` | Auto-set after login / google / refresh |\n| `refreshToken` | Auto-set after login / google / refresh |\n| `verificationToken` | UUID from verification email link (`?token=...`) |\n| `googleWebIdToken` | Google Sign-In ID token from web client |\n| `googleIosIdToken` | Google Sign-In ID token from iOS client |\n\n## Env vars (server)\n`DATABASE_URL`, `RESEND_API_KEY`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `VERIFY_EMAIL_URL`",
+    "description": "Complete Auth Service API collection.\n\n## Auth flows\n\n**Email:** Signup → Verify Email → Login → tokens\n\n**Google:** Google Signup → Google Login → tokens\n\n## Collection variables\n| Variable | Description |\n|----------|-------------|\n| `baseUrl` | API base URL (local: `http://localhost:3302`, prod: `https://auth.algoarena.co.in`) |\n| `accessToken` | Auto-set after login / google login / refresh |\n| `refreshToken` | Auto-set after login / google login / refresh |\n| `verificationToken` | UUID from verification email link (`?token=...`) |\n| `googleWebIdToken` | Google Sign-In ID token from web client |\n| `googleIosIdToken` | Google Sign-In ID token from iOS client |\n\n## Env vars (server)\n`DATABASE_URL`, `RESEND_API_KEY`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `VERIFY_EMAIL_URL`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -91,6 +91,53 @@
             },
             "url": "{{baseUrl}}/auth/verify-email",
             "description": "Verify email via JSON API (Postman / mobile apps).\n\n**Auth:** None\n\n**Requires server env:** `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `token` | string | Yes | UUID from verification email |\n\n**Response `200`:**\n```json\n{ \"message\": \"Email verified successfully\" }\n```\n\n**Errors:** `400` invalid or expired token"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth — Google Signup",
+      "item": [
+        {
+          "name": "Google Signup (Web)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"{{googleWebIdToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/auth/google/signup",
+            "description": "Register a new user with Google (web). Mirrors email signup — returns user profile, **no tokens**.\n\n**Next step:** call `Google Login (Web)` to get tokens.\n\n**Auth:** None\n\n**Requires server env:** `GOOGLE_CLIENT_ID`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google **ID token** from web. Token `aud` must match `GOOGLE_CLIENT_ID` |\n\n**Response `201`:**\n```json\n{\n  \"id\": \"uuid\",\n  \"name\": \"Mohit Kumar\",\n  \"email\": \"mohit@gmail.com\",\n  \"role\": \"user\",\n  \"isEmailVerified\": true,\n  \"createdAt\": \"2026-05-31T...\"\n}\n```\n\nUser is created with `provider=google`, `isEmailVerified=true`, avatar from Google.\n\n**Errors:** `400` user already exists, `401` invalid Google token"
+          },
+          "response": []
+        },
+        {
+          "name": "Google Signup (iOS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"{{googleIosIdToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/auth/google/signup",
+            "description": "Register a new user with Google (iOS). Same as web signup — returns user profile, **no tokens**.\n\n**Next step:** call `Google Login (iOS)` to get tokens.\n\n**Auth:** None\n\n**Requires server env:** `GOOGLE_IOS_CLIENT_ID`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google **ID token** from iOS SDK. Token `aud` must match `GOOGLE_IOS_CLIENT_ID` |\n\n**Response `201`:** Same shape as web Google signup\n\n**Errors:** `400` user already exists, `401` invalid Google token"
           },
           "response": []
         }
@@ -202,8 +249,8 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/auth/google",
-            "description": "Google Sign-In for web using ID token.\n\n**Auth:** None\n\n**Requires server env:** `GOOGLE_CLIENT_ID`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google **ID token** (NOT access token). Token `aud` must match `GOOGLE_CLIENT_ID` |\n| `deviceType` | string | No | `web` or `mobile` (default: `web`) |\n| `deviceName` | string | No | Device label for session tracking |\n\n**Response `200`:**\n```json\n{\n  \"accessToken\": \"eyJhbGciOiJIUzI1NiIs...\",\n  \"refreshToken\": \"eyJhbGciOiJIUzI1NiIs...\"\n}\n```\n\nNew users are created with `provider=google`, `isEmailVerified=true`.\n\n**Errors:** `401` invalid Google token"
+            "url": "{{baseUrl}}/auth/google/login",
+            "description": "Sign in with Google (web). User must already exist via `Google Signup (Web)`.\n\n**Auth:** None\n\n**Requires server env:** `GOOGLE_CLIENT_ID`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google **ID token**. Token `aud` must match `GOOGLE_CLIENT_ID` |\n| `deviceType` | string | No | `web` or `mobile` (default: `web`) |\n| `deviceName` | string | No | Default: `Chrome` |\n\n**Response `200`:**\n```json\n{\n  \"accessToken\": \"eyJhbGciOiJIUzI1NiIs...\",\n  \"refreshToken\": \"eyJhbGciOiJIUzI1NiIs...\"\n}\n```\n\n**Errors:**\n- `401` account not found (sign up first) or invalid token\n- `400` account uses email login (wrong provider)"
           },
           "response": []
         },
@@ -238,8 +285,44 @@
                 }
               }
             },
+            "url": "{{baseUrl}}/auth/google/login",
+            "description": "Sign in with Google (iOS). User must already exist via `Google Signup (iOS)`.\n\n**Auth:** None\n\n**Requires server env:** `GOOGLE_IOS_CLIENT_ID`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google **ID token** from iOS SDK |\n| `deviceType` | string | No | Set to `mobile` for iOS |\n| `deviceName` | string | No | e.g. `iPhone 15 Pro` |\n\n**Response `200`:** access + refresh tokens\n\n**Errors:** `401` account not found, `400` wrong provider"
+          },
+          "response": []
+        },
+        {
+          "name": "Google Login Legacy (signup + login combined)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.accessToken) pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "  if (json.refreshToken) pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"{{googleWebIdToken}}\",\n  \"deviceType\": \"web\",\n  \"deviceName\": \"Chrome\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{baseUrl}}/auth/google",
-            "description": "Google Sign-In for iOS using ID token.\n\n**Auth:** None\n\n**Requires server env:** `GOOGLE_IOS_CLIENT_ID`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google **ID token** from iOS SDK. Token `aud` must match `GOOGLE_IOS_CLIENT_ID` |\n| `deviceType` | string | No | Set to `mobile` for iOS |\n| `deviceName` | string | No | e.g. `iPhone 15 Pro` |\n\n**Response `200`:** Same as web Google login — access + refresh tokens\n\n**Errors:** `401` invalid Google token (wrong client ID / expired token)"
+            "description": "**Legacy endpoint** — auto-creates user if not found, then returns tokens in one step.\n\nPrefer the split flow:\n1. `POST /auth/google/signup`\n2. `POST /auth/google/login`\n\n**Auth:** None\n\n| Field | Type | Required | Rules |\n|-------|------|----------|-------|\n| `idToken` | string | Yes | Google ID token |\n| `deviceType` | string | No | `web` or `mobile` |\n| `deviceName` | string | No | Device label |\n\n**Response `200`:** access + refresh tokens"
           },
           "response": []
         }

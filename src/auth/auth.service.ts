@@ -105,6 +105,99 @@ export class AuthService {
     };
   }
 
+  private toSignupResponse(user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    isEmailVerified: boolean;
+    createdAt: Date;
+  }) {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      createdAt: user.createdAt,
+    };
+  }
+
+  async googleSignup(dto: GoogleLoginDto) {
+    const googleUser = await this.googleService.verifyGoogleToken(dto.idToken);
+
+    const existing = await this.usersService.findByEmail(googleUser.email);
+    if (existing) {
+      throw new BadRequestException('User already exists');
+    }
+
+    const user = await this.usersService.createUser({
+      name: googleUser.name,
+      email: googleUser.email,
+      provider: 'google',
+      providerId: googleUser.sub,
+      avatar: googleUser.picture,
+      isEmailVerified: true,
+    });
+
+    return this.toSignupResponse(user);
+  }
+
+  async googleLogin(dto: GoogleLoginDto) {
+    const googleUser = await this.googleService.verifyGoogleToken(dto.idToken);
+
+    const user = await this.usersService.findByEmail(googleUser.email);
+    if (!user) {
+      throw new UnauthorizedException(
+        'Account not found. Please sign up with Google first.',
+      );
+    }
+
+    if (user.provider !== 'google') {
+      throw new BadRequestException(
+        'This account uses email login. Please sign in with email and password.',
+      );
+    }
+
+    const updatedUser = await this.usersService.syncGoogleProfile(user.id, {
+      name: googleUser.name,
+      avatar: googleUser.picture,
+      providerId: googleUser.sub,
+    });
+
+    return this.issueTokens(updatedUser, this.resolveDevice(dto));
+  }
+
+  /** @deprecated Use googleLogin — kept for backward compatibility */
+  async googleLoginOrSignup(dto: GoogleLoginDto) {
+    const googleUser = await this.googleService.verifyGoogleToken(dto.idToken);
+
+    let user = await this.usersService.findByEmail(googleUser.email);
+
+    if (!user) {
+      user = await this.usersService.createUser({
+        name: googleUser.name,
+        email: googleUser.email,
+        provider: 'google',
+        providerId: googleUser.sub,
+        avatar: googleUser.picture,
+        isEmailVerified: true,
+      });
+    } else if (user.provider === 'google') {
+      user = await this.usersService.syncGoogleProfile(user.id, {
+        name: googleUser.name,
+        avatar: googleUser.picture,
+        providerId: googleUser.sub,
+      });
+    } else {
+      throw new BadRequestException(
+        'This account uses email login. Please sign in with email and password.',
+      );
+    }
+
+    return this.issueTokens(user, this.resolveDevice(dto));
+  }
+
   async verifyEmail(token: string) {
     const user = await this.usersService.findByVerificationToken(token);
     if (!user) {
@@ -129,25 +222,6 @@ export class AuthService {
     const valid = await argon2.verify(user.password!, dto.password);
     if (!valid) {
       throw new UnauthorizedException('Invalid credentials');
-    }
-
-    return this.issueTokens(user, this.resolveDevice(dto));
-  }
-
-  async googleLogin(dto: GoogleLoginDto) {
-    const googleUser = await this.googleService.verifyGoogleToken(dto.idToken);
-
-    let user = await this.usersService.findByEmail(googleUser.email);
-
-    if (!user) {
-      user = await this.usersService.createUser({
-        name: googleUser.name,
-        email: googleUser.email,
-        provider: 'google',
-        providerId: googleUser.sub,
-        avatar: googleUser.picture,
-        isEmailVerified: true,
-      });
     }
 
     return this.issueTokens(user, this.resolveDevice(dto));
