@@ -236,15 +236,21 @@ export class AuthService {
     }
 
     const user = await this.usersService.findById(payload.sub);
-    if (!user) {
+    if (!user || user.isDeleted) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const storedToken = await this.refreshTokensService.find(
+    const newRefreshToken = await this.jwtTokenService.generateRefreshToken({
+      sub: user.id,
+    });
+
+    const rotated = await this.refreshTokensService.rotate(
       user.id,
       refreshToken,
+      newRefreshToken,
+      this.getRefreshTokenExpiry(),
     );
-    if (!storedToken) {
+    if (!rotated) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -253,19 +259,6 @@ export class AuthService {
       email: user.email,
       role: user.role,
     });
-
-    const newRefreshToken = await this.jwtTokenService.generateRefreshToken({
-      sub: user.id,
-    });
-
-    await this.refreshTokensService.delete(storedToken.id);
-
-    await this.refreshTokensService.create(
-      user.id,
-      newRefreshToken,
-      this.getRefreshTokenExpiry(),
-      storedToken.deviceId ?? undefined,
-    );
 
     return {
       accessToken,
