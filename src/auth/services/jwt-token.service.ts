@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { APP_CONFIG } from '../../config/config.module';
 import type { AppConfig } from '../../config/config.module';
+import { parseExpiresInToDate } from '../../config/parse-expires-in';
 
 export type AccessTokenPayload = {
   sub: string;
@@ -27,15 +28,19 @@ export class JwtTokenService {
   }) {
     return this.jwtService.signAsync(payload, {
       secret: this.config.jwt.accessSecret,
-      expiresIn: '15m',
+      expiresIn: this.config.jwt.accessExpiresIn as JwtSignOptions['expiresIn'],
     });
   }
 
   async generateRefreshToken(payload: { sub: string }) {
     return this.jwtService.signAsync(payload, {
       secret: this.config.jwt.refreshSecret,
-      expiresIn: '30d',
+      expiresIn: this.config.jwt.refreshExpiresIn as JwtSignOptions['expiresIn'],
     });
+  }
+
+  getRefreshTokenExpiryDate() {
+    return parseExpiresInToDate(this.config.jwt.refreshExpiresIn);
   }
 
   async verifyRefreshToken(token: string) {

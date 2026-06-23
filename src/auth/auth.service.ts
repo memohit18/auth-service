@@ -63,17 +63,11 @@ export class AuthService {
     await this.refreshTokensService.create(
       user.id,
       refreshToken,
-      this.getRefreshTokenExpiry(),
+      this.jwtTokenService.getRefreshTokenExpiryDate(),
       session.id,
     );
 
     return { accessToken, refreshToken };
-  }
-
-  private getRefreshTokenExpiry() {
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + 30);
-    return expiryDate;
   }
 
   async signup(dto: SignupDto) {
@@ -248,7 +242,7 @@ export class AuthService {
       user.id,
       refreshToken,
       newRefreshToken,
-      this.getRefreshTokenExpiry(),
+      this.jwtTokenService.getRefreshTokenExpiryDate(),
     );
     if (!rotated) {
       throw new UnauthorizedException('Invalid refresh token');

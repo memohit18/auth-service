@@ -15,6 +15,8 @@ export default () => ({
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '1m',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '5h',
   },
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
